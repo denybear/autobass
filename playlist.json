@@ -1,0 +1,31 @@
+[
+	{
+		"song": "Riders on the strom",
+		"tempo": 90,
+		"sound": "rock",
+		"path": "./riders/",
+		"pads": [
+			{ "filename": "main", "color": "0xFF0000", "file": "main.mid" },
+			{ "filename": "Am", "color": "0x00FF00", "file": "Am.mid" },
+			{ "filename": "D", "color": "0x0000FF", "file": "D.mid" }		
+		]
+	},
+	{
+		"song": "Paradise",
+		"tempo": 100,
+		"sound": "soul",
+		"path": "./paradise/",
+		"pads": [
+			{ "filename": "main", "color": "0xFF0000", "file": "main.mid" }
+		]
+	},
+	{
+		"song": "Hey Ya!",
+		"tempo": 120,
+		"sound": "pop",
+		"path": "./hey ya/",
+		"pads": [
+			{ "filename": "main", "color": "0xFF0000", "file": "main.mid" }
+		]
+	}	
+]

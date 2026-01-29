@@ -3,9 +3,7 @@ import time
 sys.path.append('./')
 import pygame
 import pygame.midi
-
 import os
-import json
 import random
 import threading
 from collections import deque
@@ -18,20 +16,21 @@ CC       = 0xB0  # 176
 
 # Global variables
 audio_thread = None
-cap = None
-videoPath = "./video/"
 audioPath = "./audio/"
 running = True
 playing = False
 dragging = None
 rotaryChangesVolume = True
 audioVolume = 0.5
-videoRate = 0.5
 playListIndex = 0
 colorNoError = [0, 128, 0]
 colorError = [255, 0, 0]
 colorWarning = [255, 165, 0]
 isMonitoring = True		# displays a small duplicate of secondary screen on primary screen for monitoring purposes
+
+realTempo = 0			# tempo of the song
+adjustedTempo = 0		# actual tempo, once corrected by the tempo knob
+
 
 # class for handling events in the main loop
 class Event:
@@ -70,19 +69,6 @@ class EventQueue:
 		"""Return the number of events in the queue."""
 		return len(self.queue)
 
-
-# object representing a tuple: name of the song, name of the video/picture, name of samples 
-class Song:
-	def __init__(self, song="", video="", sample=["","","","","","","","",""], startPosition="beginning"):
-		self.song = song
-		self.video = video
-		self.sample = sample
-		self.startPosition = startPosition
-
-	def __repr__(self):
-		return f"Song(song={self.song}, video={self.video}, sample={self.sample}, startPosition={self.startPosition})"
-
-
 # function for the audio thread
 def play_audio(audio_file):
 	try:
@@ -117,21 +103,20 @@ def start_audio_thread(audio_file):
 
 # check online & update playlist if required
 updated, msg = sync_remote_file(
-	"https://github.com/denybear/AFPlayer/blob/main/playlist.json",
+	"https://github.com/denybear/autobass/blob/main/playlist.json",
 	local_filename="playlist.json",  # will save into the current directory
 	timeout=3.0
 )
 print(updated, msg)
 
-# Load the JSON data from the file
-with open('./playlist.json', 'r', encoding='utf-8') as file:
-	data = json.load(file)
+# Create a list of Song objects from playlist.json
+playlist = load_song_configs_from_file("playlist.json")
 
-# Create a list of Song objects
-playList = [Song(item['song'], item['video'], item['sample'], item['startPosition']) for item in data]
-# read, for each song, the midi files etc
+first = playlist[0]
+print(first.song, first.tempo, first.sound, first.path)
 
-
+for pad in first.pads:
+    print(pad.name, pad.color, pad.file, pad.color_as_int())
 
 
 # Pygame init (we'll create a tiny hidden window so the event loop works)
@@ -185,7 +170,7 @@ try:
 			
 			elif event.type == pygame.midi.MIDIIN:
 				noteOnMapping = {00:["tap tempo"], 01:["stop"], 02:["pad","0"], 03:["pad","1"], 04:["pad","2"], 05:["pad","3"], 06:["pad","4"], 07:["pad","5"], 08:["pad","6"], 09:["pad","7"], 10:["pad","8"], 11:["pad","9"], 12:["pad","10"], 13:["pad","11"], 14:["pad","12"]}
-				ccMapping = {00:["volume"], 01:["playlist"], 02:["tempo"], 14:["sound"]}
+				ccMapping = {00:["volume"], 01:["tempo"], 02:["playlist"], 14:["sound"]}
 
 				# e.data1 = status byte, e.data2 = data1, e.data3 = data2
 				status = event.status     # raw status byte (includes channel)
@@ -197,7 +182,9 @@ try:
 				if message == NOTE_ON and data2 > 0:
 					print(f"NOTE ON  ch={channel+1:02d} note={data1} vel={data2}")
 					try:
-						eq.record_event("note on", noteOnMapping [data1])
+						lst = noteOnMapping [data1]
+						lst.append (str(data2))
+						eq.record_event("note on", lst)
 					except KeyError:
 						pass
 				elif message == NOTE_OFF or (message == NOTE_ON and data2 == 0):
@@ -206,7 +193,9 @@ try:
 				elif message == CC:
 					print(f"CC       ch={channel+1:02d} cc#={data1} value={data2}")
 					try:
-						eq.record_event("cc", ccMapping [data1])
+						lst = ccMapping [data1]
+						lst.append (str(data2))
+						eq.record_event("cc", lst)
 					except KeyError:
 						pass
 
@@ -220,19 +209,49 @@ try:
 				slider_info = displaySongInfo (screen, playList [playListIndex], volume_percent=audioVolume, rate_percent=videoRate, previous_entry=playList [playListPrevious].song, next_entry=playList [playListNext].song, highlight_config=next_event.values)
 
 
+			# note on events
+			if next_event.label == "note on":
+				# stop
+				if next_event.values [0] == "stop":
+
+				# tap tempo
+				if next_event.values [0] == "tap tempo":
+
+				# pad
+				if next_event.values [0] == "pad":
+
+
+			# cc events
+			if next_event.label == "cc":
+				# volume
+				if next_event.values [0] == "volume":
+					volume = float (next_event.values [1])		# velocity between 0-127
+					volume = volume / 127.0						# volume between 0.0-1.0
+					#HERE: apply volume reduction
+
+				# tempo
+				if next_event.values [0] == "tempo":
+					temp = float (next_event.values [1])		# velocity between 0-127
+					temp = (temp / 127.0) * 20.0				# tempo increment between 0.0-20.0
+					temp = int (temp) - 10						# tempo increment between -10 and +10
+					adjustedTempo = realTempo + temp			# adjust tempo
+					adjustedTempo = max (adjustedTempo, 0)		# avoid negative values
+
+				# playlist
+				if next_event.values [0] == "playlist":
+
+				# sound
+				if next_event.values [0] == "sound":
+
+
+
+
+
 			# key events
 			if next_event.label == "note on":
 
 				# previous
 				if next_event.values [0] == "previous" or next_event.values [0] == "first song":
-					# get video file name that is currently playing
-					try:
-						previousVideoFileName = videoPath + playList [playListIndex].video
-					except (ValueError, IndexError):
-						previousVideoFileName = ""
-					# in case of 1st song, force display of video by specifying no previous video
-					if next_event.values [0] == "first song":
-						previousVideoFileName = ""
 					# previous in playlist
 					playListIndex = max(playListIndex - 1, 0)
 					playListPrevious = max(playListIndex - 1, 0)
@@ -245,11 +264,6 @@ try:
 					
 				# next
 				if next_event.values [0] == "next":
-					# get video file name that is currently playing
-					try:
-						previousVideoFileName = videoPath + playList [playListIndex].video
-					except (ValueError, IndexError):
-						previousVideoFileName = ""
 					# next in playlist
 					playListIndex = min(playListIndex + 1, len(playList) - 1)
 					playListPrevious = max(playListIndex - 1, 0)
@@ -276,28 +290,6 @@ try:
 						sampleString = "sample" + next_event.values [1]
 						eq.record_event("audio", ["play", sampleString, sampleFileName])
 
-				# audio volume -, audio volume +
-				if next_event.values [0] in ("vol-","vol+","vid-","vid+"):
-				
-					if next_event.values [0] == "vol-":
-						audioVolume = max (0, audioVolume - 0.02)
-						if isAudioHW:
-							pygame.mixer.music.set_volume (audioVolume)
-
-					# audio volume +
-					if next_event.values [0] == "vol+":
-						audioVolume = min (audioVolume + 0.02, 1.0)
-						if isAudioHW:
-							pygame.mixer.music.set_volume (audioVolume)
-
-					# record new event to update the display, based on the result of audioColor, videoColor and playing (sample exists or not)
-					highlight_config = {
-						"video_rate": {"font_size": 0.04, "bold": True, "italic": False, "inverse": False, "color": videoColor, "font_name": "arial", "spacing": 1.0},
-						"audio_volume": {"font_size": 0.04, "bold": True, "italic": False, "inverse": False, "color": audioColor, "font_name": "arial", "spacing": 1.0}
-					}
-					if playing:
-						highlight_config [sampleString] = {"font_size": 0.05, "bold": False, "italic": False, "inverse": True, "color": (0, 100, 0), "font_name": "couriernew", "spacing": 1.5}
-					eq.record_event("display", highlight_config)
 
 
 			# audio events
