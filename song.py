@@ -24,6 +24,11 @@ class Pad:
 		"""Convert '0xRRGGBB' to integer (e.g. '0xFF0000' -> 16711680)."""
 		return int(self.color, 16)
 
+	def color_as_tuple(self) -> tuple[int, int, int]:
+		value = int(self.color, 16)
+		return (value >> 16) & 0xFF, (value >> 8) & 0xFF, value & 0xFF
+
+
 
 @dataclass(frozen=True)
 class SongConfig:
@@ -59,4 +64,3 @@ def load_song_configs_from_file(file_path: str | Path) -> List[SongConfig]:
 	if not isinstance(raw, list):
 		raise ValueError("Expected top-level JSON array (a list).")
 	return [SongConfig.from_dict(item) for item in raw]
-``

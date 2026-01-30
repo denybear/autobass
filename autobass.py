@@ -7,12 +7,15 @@ import os
 import random
 import threading
 from collections import deque
-from playlist_update import sync_remote_file
+import playlist_update
+import song
+import draw
+
 
 
 NOTE_ON  = 0x90  # 144
 NOTE_OFF = 0x80  # 128
-CC       = 0xB0  # 176
+CC	   = 0xB0  # 176
 
 # Global variables
 audio_thread = None
@@ -21,15 +24,20 @@ running = True
 playing = False
 dragging = None
 rotaryChangesVolume = True
-audioVolume = 0.5
-playListIndex = 0
 colorNoError = [0, 128, 0]
 colorError = [255, 0, 0]
 colorWarning = [255, 165, 0]
 isMonitoring = True		# displays a small duplicate of secondary screen on primary screen for monitoring purposes
 
+
+
 realTempo = 0			# tempo of the song
 adjustedTempo = 0		# actual tempo, once corrected by the tempo knob
+playListIndex = 0
+audioVolume = 0.5
+soundMapping = {"rock":0, "pop":1, "soul":2, "jazz":3, "synth": 4}
+soundIndex = 0;
+
 
 
 # class for handling events in the main loop
@@ -102,7 +110,7 @@ def start_audio_thread(audio_file):
 ########
 
 # check online & update playlist if required
-updated, msg = sync_remote_file(
+updated, msg = playlist_update.sync_remote_file(
 	"https://github.com/denybear/autobass/blob/main/playlist.json",
 	local_filename="playlist.json",  # will save into the current directory
 	timeout=3.0
@@ -110,18 +118,18 @@ updated, msg = sync_remote_file(
 print(updated, msg)
 
 # Create a list of Song objects from playlist.json
-playlist = load_song_configs_from_file("playlist.json")
+playList = song.load_song_configs_from_file("playlist.json")
 
-first = playlist[0]
+first = playList[0]
 print(first.song, first.tempo, first.sound, first.path)
 
 for pad in first.pads:
-    print(pad.name, pad.color, pad.file, pad.color_as_int())
+	print(pad.name, pad.color, pad.file, pad.color_as_int())
 
 
 # Pygame init (we'll create a tiny hidden window so the event loop works)
 pygame.init()
-screen = pygame.display.set_mode((1, 1))  # no UI; just to pump events
+eventScreen = pygame.display.set_mode((1, 1))  					# no UI; just to pump events
 pygame.display.set_caption("MIDI Event Loop")
 
 # Create windows
@@ -169,13 +177,13 @@ try:
 				running = False
 			
 			elif event.type == pygame.midi.MIDIIN:
-				noteOnMapping = {00:["tap tempo"], 01:["stop"], 02:["pad","0"], 03:["pad","1"], 04:["pad","2"], 05:["pad","3"], 06:["pad","4"], 07:["pad","5"], 08:["pad","6"], 09:["pad","7"], 10:["pad","8"], 11:["pad","9"], 12:["pad","10"], 13:["pad","11"], 14:["pad","12"]}
+				noteOnMapping = {00:["tap tempo"], 01:["stop"], 02:["pad","0"], 03:["pad","1"], 04:["pad","2"], 05:["pad","3"], 06:["pad","4"], 07:["pad","5"], 08:["pad","6"]}
 				ccMapping = {00:["volume"], 01:["tempo"], 02:["playlist"], 14:["sound"]}
 
 				# e.data1 = status byte, e.data2 = data1, e.data3 = data2
-				status = event.status     # raw status byte (includes channel)
-				data1  = event.data1      # note/controller number
-				data2  = event.data2      # velocity/value
+				status = event.status	 # raw status byte (includes channel)
+				data1  = event.data1	  # note/controller number
+				data2  = event.data2	  # velocity/value
 				channel = status & 0x0F
 				message = status & 0xF0
 
@@ -191,7 +199,7 @@ try:
 					# Treat Note On with velocity 0 as Note Off (MIDI convention)
 					print(f"NOTE OFF ch={channel+1:02d} note={data1} vel={data2}")
 				elif message == CC:
-					print(f"CC       ch={channel+1:02d} cc#={data1} value={data2}")
+					print(f"CC	   ch={channel+1:02d} cc#={data1} value={data2}")
 					try:
 						lst = ccMapping [data1]
 						lst.append (str(data2))
@@ -206,8 +214,36 @@ try:
 
 			# display events
 			if next_event.label == "display":
-				slider_info = displaySongInfo (screen, playList [playListIndex], volume_percent=audioVolume, rate_percent=videoRate, previous_entry=playList [playListPrevious].song, next_entry=playList [playListNext].song, highlight_config=next_event.values)
-
+				squares = []
+				square = {}
+				# define pads to be displayed
+				for i in range (0,6)
+					square = {}
+					try:
+						square ["text"] = playList [playListIndex].pads [i].name
+						square ["color"] = playList [playListIndex].pads [i].color_as_tuple()
+					except Exception as e:
+						square ["text"] = ""
+						square ["color"] = (128,128,128)		# gray pads if not defined
+					squares.append (square)
+				# define song names
+				previousSoung = playList [playListIndex - 1].song if playListIndex > 0 else ""
+				nextSong = playList [playListIndex + 1].song if playListIndex < (len (playList) - 1) else ""
+				currentSong = playList [playListIndex].song
+				
+				draw.draw_dashboard(
+					screen=screen,
+					squares=squares,
+					volume_percent=audioVolume,
+					tempo_bpm=adjustedTempo,
+					sound=str (soundIndex),
+					prev_song=previousSoung,
+					current_song=currentSong,
+					next_song=nextSong
+				)				
+				
+				#HERE: required or not?
+				pygame.display.flip()
 
 			# note on events
 			if next_event.label == "note on":
@@ -219,29 +255,50 @@ try:
 
 				# pad
 				if next_event.values [0] == "pad":
+					padNumber = int (next_event.values [1])			# get pad number
+					pads = playList [playListIndex].pads			# list of pads for the current song
+					
+					if (padNumber < len (pads)):					# make sure the pressed pad is specified in json as a pad
+						#color = color_as_int (pads [padNumber].color)
+						file = pads [padNumber].file
+						#HERE: play new pressed pad (midi "file"), display pad that is playing
 
 
 			# cc events
 			if next_event.label == "cc":
 				# volume
 				if next_event.values [0] == "volume":
-					volume = float (next_event.values [1])		# velocity between 0-127
-					volume = volume / 127.0						# volume between 0.0-1.0
-					#HERE: apply volume reduction
+					vol = float (next_event.values [1])				# velocity between 0-127
+					vol = vol / 127.0								# volume between 0.0-1.0
+					audioVolume = vol
+					#HERE: apply volume reduction; display new volume
 
 				# tempo
 				if next_event.values [0] == "tempo":
-					temp = float (next_event.values [1])		# velocity between 0-127
-					temp = (temp / 127.0) * 20.0				# tempo increment between 0.0-20.0
-					temp = int (temp) - 10						# tempo increment between -10 and +10
-					adjustedTempo = realTempo + temp			# adjust tempo
-					adjustedTempo = max (adjustedTempo, 0)		# avoid negative values
+					temp = float (next_event.values [1])			# velocity between 0-127
+					temp = (temp / 127.0) * 20.0					# tempo increment between 0.0-20.0
+					temp = int (temp) - 10							# tempo increment between -10 and +10
+					adjustedTempo = realTempo + temp				# adjust tempo
+					adjustedTempo = max (adjustedTempo, 0)			# avoid negative values
+					#HERE: assing new tempo; display new tempo
 
 				# playlist
 				if next_event.values [0] == "playlist":
+					idx = float (next_event.values [1])				# velocity between 0-127
+					idx = int (temp / 127.0) * len (playList)		# index in playlist is between 0 and length of playlist
+					idx = max (idx, 0)								# avoid negative values
+					idx = min (idx, len(playList) - 1)				# avoid values >= length of playlist
+					playListIndex = idx
+					#HERE: stop audio; display new song, previous and next
 
 				# sound
 				if next_event.values [0] == "sound":
+					snd = float (next_event.values [1])				# velocity between 0-127
+					snd = int (temp / 127.0) * len (soundMapping)	# index in soundfont is between 0 and length of dictionary
+					snd = max (snd, 0)								# avoid negative values
+					snd = min (snd, len(soundMapping) - 1)			# avoid values >= length of dictionary
+					soundIndex = snd
+					#HERE: assing new sound; display new sound
 
 
 
