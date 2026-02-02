@@ -1,16 +1,31 @@
 import sys
 import time
+import statistics
+
 sys.path.append('./')
 import pygame
 import pygame.midi
 import os
 import random
-import threading
+
 from collections import deque
 import playlist_update
 import song
 import draw
+import player
 
+#TO DO
+#display pad that is playing
+#create sf2 with only bass sounds
+#manage sound / soundfont
+#manage volume
+#tap tempo
+#tempo knob shall be centered on tap tempo, if exists
+
+
+
+#pip install pretty_midi pyfluidsynth simpleaudio numpy
+# and install fluidsynth on your OS (package manager)
 
 
 NOTE_ON  = 0x90  # 144
@@ -18,21 +33,13 @@ NOTE_OFF = 0x80  # 128
 CC	   = 0xB0  # 176
 
 # Global variables
-audio_thread = None
 audioPath = "./audio/"
-running = True
 playing = False
-dragging = None
-rotaryChangesVolume = True
-colorNoError = [0, 128, 0]
-colorError = [255, 0, 0]
-colorWarning = [255, 165, 0]
-isMonitoring = True		# displays a small duplicate of secondary screen on primary screen for monitoring purposes
 
 
-
-realTempo = 0			# tempo of the song
-adjustedTempo = 0		# actual tempo, once corrected by the tempo knob
+running = True
+referenceTempo = 0		# initial tempo of midi file
+tempoRatio = 1.0		# to play slower or faster
 playListIndex = 0
 audioVolume = 0.5
 soundMapping = {"rock":0, "pop":1, "soul":2, "jazz":3, "synth": 4}
@@ -77,31 +84,37 @@ class EventQueue:
 		"""Return the number of events in the queue."""
 		return len(self.queue)
 
-# function for the audio thread
-def play_audio(audio_file):
-	try:
-		pygame.mixer.music.load(audio_file)
-	except pygame.error:
-		# file does not exist
-		return False
-	pygame.mixer.music.set_endevent(pygame.USEREVENT)	# pygame event is triggered after playing is complete
-	pygame.mixer.music.play()
-	return True
 
-def stop_audio():
-	pygame.mixer.music.stop()
+# class for handling tap tempo
+class TapTempo:
+	def __init__(self, reference_bpm, max_taps=6, timeout=2.0):
+		self.reference_bpm = reference_bpm
+		self.max_taps = max_taps
+		self.timeout = timeout
+		self.taps = []
 
-def start_audio_thread(audio_file):
-	global audio_thread
-	stop_audio()
+	def tap(self):
+		now = time.monotonic()
 
-	if not os.path.isfile(audio_file):
-		# file does not exist
-		return False
+		if self.taps and now - self.taps[-1] > self.timeout:
+			self.taps.clear()
 
-	audio_thread = threading.Thread(target=play_audio, args=(audio_file,))
-	audio_thread.start()
-	return True
+		self.taps.append(now)
+		self.taps = self.taps[-self.max_taps:]
+
+		if len(self.taps) < 2:
+			return None
+
+		intervals = [
+			self.taps[i] - self.taps[i - 1]
+			for i in range(1, len(self.taps))
+		]
+
+		avg = statistics.median(intervals)
+		tapped_bpm = 60.0 / avg
+
+		return tapped_bpm / self.reference_bpm
+
 
 
 	
@@ -139,11 +152,13 @@ screen = pygame.display.set_mode((480, 320), pygame.NOFRAME)	# fixed display siz
 pygame.mouse.set_visible (False)
 pygame.event.set_grab (True)
 
+# Open player & load soundfont
+player = LiveFsPlayer("MySoundFont.sf2")
 
 # Main loop
 eq = EventQueue()		# event queue to manage the events happening in the main loop
 # force display of 1st song in playlist and video
-eq.record_event("key", ["first song"])
+eq.record_event("cc", ["playlist","0"])
 
 
 try:
@@ -201,7 +216,8 @@ try:
 				elif message == CC:
 					print(f"CC	   ch={channel+1:02d} cc#={data1} value={data2}")
 					try:
-						lst = ccMapping [data1]
+						lst = []
+						lst.append (ccMapping [data1])
 						lst.append (str(data2))
 						eq.record_event("cc", lst)
 					except KeyError:
@@ -235,7 +251,7 @@ try:
 					screen=screen,
 					squares=squares,
 					volume_percent=audioVolume,
-					tempo_bpm=adjustedTempo,
+					tempo_bpm=int (referenceTempo * tempoRatio),
 					sound=str (soundIndex),
 					prev_song=previousSoung,
 					current_song=currentSong,
@@ -249,9 +265,28 @@ try:
 			if next_event.label == "note on":
 				# stop
 				if next_event.values [0] == "stop":
+					playing = False
+					player.stop()
+					eq.record_event("display", [])
 
 				# tap tempo
 				if next_event.values [0] == "tap tempo":
+""" calls
+
+tap = TapTempo(referenceTempo)
+
+
+# Example: keyboard callback / button handler
+def on_spacebar_pressed():
+	new_speed = tap.tap()
+	if new_speed is not None:
+		player.set_speed(new_speed)
+		print(f"Tempo now: {new_speed * referenceTempo:.1f} BPM")
+		
+
+"""
+
+
 
 				# pad
 				if next_event.values [0] == "pad":
@@ -260,8 +295,10 @@ try:
 					
 					if (padNumber < len (pads)):					# make sure the pressed pad is specified in json as a pad
 						#color = color_as_int (pads [padNumber].color)
-						file = pads [padNumber].file
-						#HERE: play new pressed pad (midi "file"), display pad that is playing
+						referenceTempo = player.play(pads [padNumber].file, loop=True)
+						eq.record_event ("display", [])				# display pad that is playing
+
+
 
 
 			# cc events
@@ -272,15 +309,20 @@ try:
 					vol = vol / 127.0								# volume between 0.0-1.0
 					audioVolume = vol
 					#HERE: apply volume reduction; display new volume
+"""
+player.set_master_volume(0.3)   # comfortable
+player.set_master_volume(1.0)   # loud
+player.set_master_volume(0.0)   # mute
+"""
 
 				# tempo
 				if next_event.values [0] == "tempo":
 					temp = float (next_event.values [1])			# velocity between 0-127
-					temp = (temp / 127.0) * 20.0					# tempo increment between 0.0-20.0
-					temp = int (temp) - 10							# tempo increment between -10 and +10
-					adjustedTempo = realTempo + temp				# adjust tempo
-					adjustedTempo = max (adjustedTempo, 0)			# avoid negative values
-					#HERE: assing new tempo; display new tempo
+					temp = (temp / 127.0) * 0.2						# tempo increment between 0.0-0.2
+					temp = temp - 0.1								# tempo increment between -0.1 and +0.1
+					tempoRatio = 1.0 + temp
+					player.set_speed (tempoRatio)					# assign new tempo
+					eq.record_event ("display", [])					# display new tempo
 
 				# playlist
 				if next_event.values [0] == "playlist":
@@ -289,7 +331,8 @@ try:
 					idx = max (idx, 0)								# avoid negative values
 					idx = min (idx, len(playList) - 1)				# avoid values >= length of playlist
 					playListIndex = idx
-					#HERE: stop audio; display new song, previous and next
+					#stop audio; no need to display new song, previous and next, as this is done in stop
+					eq.record_event("stop", [])
 
 				# sound
 				if next_event.values [0] == "sound":
@@ -299,88 +342,9 @@ try:
 					snd = min (snd, len(soundMapping) - 1)			# avoid values >= length of dictionary
 					soundIndex = snd
 					#HERE: assing new sound; display new sound
-
-
-
-
-
-			# key events
-			if next_event.label == "note on":
-
-				# previous
-				if next_event.values [0] == "previous" or next_event.values [0] == "first song":
-					# previous in playlist
-					playListIndex = max(playListIndex - 1, 0)
-					playListPrevious = max(playListIndex - 1, 0)
-					playListNext = min(playListIndex + 1, len(playList) - 1)
-					# record new event to update the display
-					eq.record_event("display", {
-						"video_rate": {"font_size": 0.04, "bold": True, "italic": False, "inverse": False, "color": videoColor, "font_name": "arial", "spacing": 1.0},
-						"audio_volume": {"font_size": 0.04, "bold": True, "italic": False, "inverse": False, "color": audioColor, "font_name": "arial", "spacing": 1.0}
-					})
-					
-				# next
-				if next_event.values [0] == "next":
-					# next in playlist
-					playListIndex = min(playListIndex + 1, len(playList) - 1)
-					playListPrevious = max(playListIndex - 1, 0)
-					playListNext = min(playListIndex + 1, len(playList) - 1)
-					# record new event to update the display
-					eq.record_event("display", {
-						"video_rate": {"font_size": 0.04, "bold": True, "italic": False, "inverse": False, "color": videoColor, "font_name": "arial", "spacing": 1.0},
-						"audio_volume": {"font_size": 0.04, "bold": True, "italic": False, "inverse": False, "color": audioColor, "font_name": "arial", "spacing": 1.0}
-					})
-
-				# sample keys
-				if next_event.values [0] == "sample":
-					# get actual sample filename from playlist; check whether empty
-					try:
-						sampleFileName = audioPath + playList [playListIndex].sample [int (next_event.values [1]) - 1]
-					except (ValueError, IndexError):
-						sampleFileName = ""
-
-					# check if playing or not; if playing, we should stop the audio first (update of the display will be done in stop event processing)
-					if playing:
-						eq.record_event("audio", ["stop"])
-					# if not playing, then we should initiate playing
-					else:
-						sampleString = "sample" + next_event.values [1]
-						eq.record_event("audio", ["play", sampleString, sampleFileName])
-
-
-
-			# audio events
-			if next_event.label == "audio":
-
-				# stop
-				if next_event.values [0] == "stop":
-					if isAudioHW: stop_audio()
-					playing = False
-					audioColor = colorNoError
-					# record new event to update the display
-					eq.record_event("display", {
-						"video_rate": {"font_size": 0.04, "bold": True, "italic": False, "inverse": False, "color": videoColor, "font_name": "arial", "spacing": 1.0},
-						"audio_volume": {"font_size": 0.04, "bold": True, "italic": False, "inverse": False, "color": audioColor, "font_name": "arial", "spacing": 1.0}
-					})
-
-				# play
-				if next_event.values [0] == "play":
-					# attempt to open audio file and play it
-					sampleString = next_event.values [1]
-					sampleFileName = next_event.values [2]
-					playing = start_audio_thread (sampleFileName) if isAudioHW else False
-					audioColor = colorNoError if playing else colorWarning
-					# record new event to update the display, based on the result of videoColor and playing (sample exists or not)
-					highlight_config = {
-						"video_rate": {"font_size": 0.04, "bold": True, "italic": False, "inverse": False, "color": videoColor, "font_name": "arial", "spacing": 1.0},
-						"audio_volume": {"font_size": 0.04, "bold": True, "italic": False, "inverse": False, "color": audioColor, "font_name": "arial", "spacing": 1.0}
-					}
-					if playing:
-						highlight_config [sampleString] = {"font_size": 0.05, "bold": False, "italic": False, "inverse": True, "color": (0, 100, 0), "font_name": "couriernew", "spacing": 1.5}
-					eq.record_event("display", highlight_config)
-
-
-		# Perform non-event based functions, ie. video display and key capture
+					#player.set_instrument(channel=0, bank=0, preset=40)
+					#player.set_all_instruments(bank=0, preset=42, skip_drums=True)
+					eq.record_event ("display", [])					# display new tempo
 
 		# Keep loop responsive
 		pygame.time.wait(5)
@@ -392,7 +356,9 @@ finally:
 		inp.close()
 	except Exception:
 		pass
-	if isAudioHW: stop_audio()
+	# stop audio
+	player.stop()
+	player.close()
 	# Disable input grabbing before exiting
 	pygame.event.set_grab(False)
 	pygame.mouse.set_visible (True)
