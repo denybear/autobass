@@ -15,14 +15,8 @@ import draw
 import player
 
 #TO DO
-#display pad that is playing
+#display pad that is playing (optional)
 #create sf2 with only bass sounds
-#manage sound / soundfont
-#manage volume
-#tap tempo
-#tempo knob shall be centered on tap tempo, if exists
-
-
 
 #pip install pretty_midi pyfluidsynth simpleaudio numpy
 # and install fluidsynth on your OS (package manager)
@@ -32,18 +26,16 @@ NOTE_ON  = 0x90  # 144
 NOTE_OFF = 0x80  # 128
 CC	   = 0xB0  # 176
 
-# Global variables
-audioPath = "./audio/"
-playing = False
-
-
+# Main variables
 running = True
-referenceTempo = 0		# initial tempo of midi file
+referenceTempo = 120	# initial tempo of midi file
 tempoRatio = 1.0		# to play slower or faster
+tapTempoRatio = 1.0		# to play slower or faster
+knobTempoRatio = 1.0	# to play slower or faster
 playListIndex = 0
 audioVolume = 0.5
 soundMapping = {"rock":0, "pop":1, "soul":2, "jazz":3, "synth": 4}
-soundIndex = 0;
+soundName = "rock";
 
 
 
@@ -159,6 +151,7 @@ player = LiveFsPlayer("MySoundFont.sf2")
 eq = EventQueue()		# event queue to manage the events happening in the main loop
 # force display of 1st song in playlist and video
 eq.record_event("cc", ["playlist","0"])
+tap = TapTempo(referenceTempo)
 
 
 try:
@@ -252,7 +245,7 @@ try:
 					squares=squares,
 					volume_percent=audioVolume,
 					tempo_bpm=int (referenceTempo * tempoRatio),
-					sound=str (soundIndex),
+					sound=soundName,
 					prev_song=previousSoung,
 					current_song=currentSong,
 					next_song=nextSong
@@ -265,29 +258,16 @@ try:
 			if next_event.label == "note on":
 				# stop
 				if next_event.values [0] == "stop":
-					playing = False
 					player.stop()
 					eq.record_event("display", [])
 
 				# tap tempo
 				if next_event.values [0] == "tap tempo":
-""" calls
-
-tap = TapTempo(referenceTempo)
-
-
-# Example: keyboard callback / button handler
-def on_spacebar_pressed():
-	new_speed = tap.tap()
-	if new_speed is not None:
-		player.set_speed(new_speed)
-		print(f"Tempo now: {new_speed * referenceTempo:.1f} BPM")
+					tapTempoRatio = tap.tap()
+					if tapTempoRatio is not None:
+						tempoRatio = tapTempoRatio
+						player.set_speed(tempoRatio)
 		
-
-"""
-
-
-
 				# pad
 				if next_event.values [0] == "pad":
 					padNumber = int (next_event.values [1])			# get pad number
@@ -296,10 +276,8 @@ def on_spacebar_pressed():
 					if (padNumber < len (pads)):					# make sure the pressed pad is specified in json as a pad
 						#color = color_as_int (pads [padNumber].color)
 						referenceTempo = player.play(pads [padNumber].file, loop=True)
+						tap = TapTempo(referenceTempo)
 						eq.record_event ("display", [])				# display pad that is playing
-
-
-
 
 			# cc events
 			if next_event.label == "cc":
@@ -308,19 +286,19 @@ def on_spacebar_pressed():
 					vol = float (next_event.values [1])				# velocity between 0-127
 					vol = vol / 127.0								# volume between 0.0-1.0
 					audioVolume = vol
-					#HERE: apply volume reduction; display new volume
-"""
-player.set_master_volume(0.3)   # comfortable
-player.set_master_volume(1.0)   # loud
-player.set_master_volume(0.0)   # mute
-"""
+					player.set_master_volume(audioVolume)
+					eq.record_event ("display", [])					# display new volume
 
 				# tempo
 				if next_event.values [0] == "tempo":
 					temp = float (next_event.values [1])			# velocity between 0-127
 					temp = (temp / 127.0) * 0.2						# tempo increment between 0.0-0.2
 					temp = temp - 0.1								# tempo increment between -0.1 and +0.1
-					tempoRatio = 1.0 + temp
+					knobTempoRatio = temp
+					if tapTempoRatio is not None:
+						tempoRatio = tapTempoRatio + knobTempoRatio
+					else:
+						tempoRatio = 1.0 + knobTempoRatio
 					player.set_speed (tempoRatio)					# assign new tempo
 					eq.record_event ("display", [])					# display new tempo
 
@@ -331,20 +309,18 @@ player.set_master_volume(0.0)   # mute
 					idx = max (idx, 0)								# avoid negative values
 					idx = min (idx, len(playList) - 1)				# avoid values >= length of playlist
 					playListIndex = idx
-					#stop audio; no need to display new song, previous and next, as this is done in stop
-					eq.record_event("stop", [])
+					eq.record_event ("display", [])					# display new song names
 
 				# sound
 				if next_event.values [0] == "sound":
 					snd = float (next_event.values [1])				# velocity between 0-127
 					snd = int (temp / 127.0) * len (soundMapping)	# index in soundfont is between 0 and length of dictionary
 					snd = max (snd, 0)								# avoid negative values
-					snd = min (snd, len(soundMapping) - 1)			# avoid values >= length of dictionary
-					soundIndex = snd
-					#HERE: assing new sound; display new sound
+					snd = min (snd, len(soundMapping) - 1)			# avoid values >= length of dictionary				
+					soundName = [k for k, v in soundMapping.items() if v == snd]
 					#player.set_instrument(channel=0, bank=0, preset=40)
-					#player.set_all_instruments(bank=0, preset=42, skip_drums=True)
-					eq.record_event ("display", [])					# display new tempo
+					player.set_all_instruments(bank=0, preset=snd, skip_drums=True)
+					eq.record_event ("display", [])					# display new sound
 
 		# Keep loop responsive
 		pygame.time.wait(5)
