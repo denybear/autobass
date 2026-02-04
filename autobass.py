@@ -16,7 +16,6 @@ import player
 
 #TO DO
 #display pad that is playing (optional)
-#create sf2 with only bass sounds
 
 #pip install pretty_midi pyfluidsynth simpleaudio numpy
 # and install fluidsynth on your OS (package manager)
@@ -34,8 +33,8 @@ tapTempoRatio = 1.0		# to play slower or faster
 knobTempoRatio = 1.0	# to play slower or faster
 playListIndex = 0
 audioVolume = 0.5
-soundMapping = {"rock":0, "pop":1, "soul":2, "jazz":3, "synth": 4}
-soundName = "rock";
+soundMapping = {"Acoustic 1":0, "Acoustic 2":1, "Fingered 1":2, "Fingered 2":3, "Fretless 1": 4, "Fretless 2": 5, "Picked 1": 6, "Picked 2": 7,  "Slap 1": 8,  "Slap 2": 9,  "Synth 1": 10,  "Synth 2": 11}
+soundName = "Acoustic 1";
 
 
 
@@ -145,7 +144,7 @@ pygame.mouse.set_visible (False)
 pygame.event.set_grab (True)
 
 # Open player & load soundfont
-player = LiveFsPlayer("MySoundFont.sf2")
+player = LiveFsPlayer("autobass.sf2")
 
 # Main loop
 eq = EventQueue()		# event queue to manage the events happening in the main loop
