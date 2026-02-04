@@ -9,7 +9,7 @@ import os
 import random
 
 from collections import deque
-import playlist_update
+import update
 import song
 import draw
 import player
@@ -17,8 +17,9 @@ import player
 #TO DO
 #display pad that is playing (optional)
 
-#pip install pretty_midi pyfluidsynth simpleaudio numpy
+#pip install pretty_midi pyfluidsynth mido
 # and install fluidsynth on your OS (package manager)
+#pip install google-api-python-client google-auth google-auth-httplib2
 
 
 NOTE_ON  = 0x90  # 144
@@ -113,16 +114,23 @@ class TapTempo:
 # MAIN #
 ########
 
-# check online & update playlist if required
-updated, msg = playlist_update.sync_remote_file(
-	"https://github.com/denybear/autobass/blob/main/playlist.json",
-	local_filename="playlist.json",  # will save into the current directory
-	timeout=3.0
+# get latest playlist and midi files from google drive (public access)
+API_KEY = os.environ["GOOGLE_API_KEY"]  # store it securely
+
+path = download_public_drive_folder(
+	"https://drive.google.com/drive/folders/15uNXeRBIhVvZJIhL4yTw4IsStMhUaaxl",
+	api_key=API_KEY,
+	dest_root="./assets",
+	timeout_sec=5,
 )
-print(updated, msg)
+
+if path is None:
+	print("Drive folder not downloaded (offline/timeout/not public/not a folder). Continuing…")
+else:
+	print("Downloaded to:", path)
 
 # Create a list of Song objects from playlist.json
-playList = song.load_song_configs_from_file("playlist.json")
+playList = song.load_song_configs_from_file("./autobass_playlist/playlist.json")
 
 first = playList[0]
 print(first.song, first.tempo, first.sound, first.path)
