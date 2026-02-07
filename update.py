@@ -150,4 +150,3 @@ def download_public_drive_folder(
 	except Exception:
 		shutil.rmtree(staging_parent, ignore_errors=True)
 		return None
-``

@@ -12,15 +12,32 @@ from collections import deque
 import update
 import song
 import draw
-import player
+import fluid_player
 
 #TO DO
 #display pad that is playing (optional)
 
-#pip install pretty_midi pyfluidsynth mido
-# and install fluidsynth on your OS (package manager)
-#pip install google-api-python-client google-auth google-auth-httplib2
+"""
+installs:
 
+sudo apt install fluidsynth
+
+#CREATE VIRTUAL ENVIRONMENT
+sudo apt update
+sudo apt install python3 python3-pip python3-venv
+mkdir my_project
+cd my_project
+python3 -m venv env
+source env/bin/activate
+pip install <module_name>
+deactivate
+
+#INSTALL PACKAGES
+pip install pretty_midi pyfluidsynth mido
+pip install pygame
+pip install httplib2
+pip install google-api-python-client
+"""
 
 NOTE_ON  = 0x90  # 144
 NOTE_OFF = 0x80  # 128
@@ -36,6 +53,7 @@ playListIndex = 0
 audioVolume = 0.5
 soundMapping = {"Acoustic 1":0, "Acoustic 2":1, "Fingered 1":2, "Fingered 2":3, "Fretless 1": 4, "Fretless 2": 5, "Picked 1": 6, "Picked 2": 7,  "Slap 1": 8,  "Slap 2": 9,  "Synth 1": 10,  "Synth 2": 11}
 soundName = "Acoustic 1";
+assetPath = "./autobass_playlist"
 
 
 
@@ -115,14 +133,15 @@ class TapTempo:
 ########
 
 # get latest playlist and midi files from google drive (public access)
-API_KEY = os.environ["GOOGLE_API_KEY"]  # store it securely
+API_KEY = os.environ["GOOGLE_API_KEY"]  # API_KEY is an environment variable where the key is stored
 
-path = download_public_drive_folder(
-	"https://drive.google.com/drive/folders/15uNXeRBIhVvZJIhL4yTw4IsStMhUaaxl",
+path = update.download_public_drive_folder(
+	"https://drive.google.com/drive/folders/1io1W0YnH7mI1X7S5Q3wC6OUZZVxWNRpT",
 	api_key=API_KEY,
-	dest_root="./assets",
-	timeout_sec=5,
+	dest_root="./",
+	timeout_sec=10,
 )
+
 
 if path is None:
 	print("Drive folder not downloaded (offline/timeout/not public/not a folder). Continuing…")
@@ -130,7 +149,7 @@ else:
 	print("Downloaded to:", path)
 
 # Create a list of Song objects from playlist.json
-playList = song.load_song_configs_from_file("./autobass_playlist/playlist.json")
+playList = song.load_song_configs_from_file(assetPath + "/playlist.json")
 
 first = playList[0]
 print(first.song, first.tempo, first.sound, first.path)
@@ -141,6 +160,7 @@ for pad in first.pads:
 
 # Pygame init (we'll create a tiny hidden window so the event loop works)
 pygame.init()
+pygame.midi.init()
 eventScreen = pygame.display.set_mode((1, 1))  					# no UI; just to pump events
 pygame.display.set_caption("MIDI Event Loop")
 
@@ -152,7 +172,7 @@ pygame.mouse.set_visible (False)
 pygame.event.set_grab (True)
 
 # Open player & load soundfont
-player = LiveFsPlayer("autobass.sf2")
+player = fluid_player.LiveFsPlayer("autobass.sf2")
 
 # Main loop
 eq = EventQueue()		# event queue to manage the events happening in the main loop
@@ -162,12 +182,10 @@ tap = TapTempo(referenceTempo)
 
 
 try:
-	# If you don't pass a device_id, use the system default
-	if device_id is None:
-		device_id = pygame.midi.get_default_input_id()
+	device_id = pygame.midi.get_default_input_id()
 	if device_id == -1:
 		print("No default MIDI input device found.")
-		return
+		quit ()
 
 	print(f"Using MIDI input device #{device_id}")
 	inp = pygame.midi.Input(device_id)
@@ -192,8 +210,8 @@ try:
 				running = False
 			
 			elif event.type == pygame.midi.MIDIIN:
-				noteOnMapping = {00:["tap tempo"], 01:["stop"], 02:["pad","0"], 03:["pad","1"], 04:["pad","2"], 05:["pad","3"], 06:["pad","4"], 07:["pad","5"], 08:["pad","6"]}
-				ccMapping = {00:["volume"], 01:["tempo"], 02:["playlist"], 14:["sound"]}
+				noteOnMapping = {0:["tap tempo"], 1:["stop"], 2:["pad","0"], 3:["pad","1"], 4:["pad","2"], 5:["pad","3"], 6:["pad","4"], 7:["pad","5"], 8:["pad","6"]}
+				ccMapping = {0:["volume"], 1:["tempo"], 2:["playlist"], 3:["sound"]}
 
 				# e.data1 = status byte, e.data2 = data1, e.data3 = data2
 				status = event.status	 # raw status byte (includes channel)
@@ -233,7 +251,7 @@ try:
 				squares = []
 				square = {}
 				# define pads to be displayed
-				for i in range (0,6)
+				for i in range (0,6):
 					square = {}
 					try:
 						square ["text"] = playList [playListIndex].pads [i].name
@@ -282,7 +300,7 @@ try:
 					
 					if (padNumber < len (pads)):					# make sure the pressed pad is specified in json as a pad
 						#color = color_as_int (pads [padNumber].color)
-						referenceTempo = player.play(pads [padNumber].file, loop=True)
+						referenceTempo = player.play(assetPath + "/" + playList [playListIndex].path + pads [padNumber].file, loop=True)
 						tap = TapTempo(referenceTempo)
 						eq.record_event ("display", [])				# display pad that is playing
 
@@ -341,7 +359,6 @@ finally:
 		pass
 	# stop audio
 	player.stop()
-	player.close()
 	# Disable input grabbing before exiting
 	pygame.event.set_grab(False)
 	pygame.mouse.set_visible (True)
