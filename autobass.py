@@ -4,9 +4,9 @@ import statistics
 
 sys.path.append('./')
 import pygame
-import pygame.midi
 import os
 import random
+import mido
 
 from collections import deque
 import update
@@ -33,24 +33,23 @@ pip install <module_name>
 deactivate
 
 #INSTALL PACKAGES
-pip install pretty_midi pyfluidsynth mido
+pip install pretty_midi pyfluidsynth mido python-rtmidi
 pip install pygame
 pip install httplib2
 pip install google-api-python-client
 """
 
-NOTE_ON  = 0x90  # 144
-NOTE_OFF = 0x80  # 128
-CC	   = 0xB0  # 176
 
 # Main variables
 running = True
 referenceTempo = 120	# initial tempo of midi file
 tempoRatio = 1.0		# to play slower or faster
-tapTempoRatio = 1.0		# to play slower or faster
+tapTempoRatio = None	# to play slower or faster
 knobTempoRatio = 1.0	# to play slower or faster
 playListIndex = 0
 audioVolume = 0.5
+noteOnMapping = {0:["tap tempo"], 1:["stop"], 2:["pad","0"], 3:["pad","1"], 4:["pad","2"], 5:["pad","3"], 6:["pad","4"], 7:["pad","5"], 8:["pad","6"]}
+ccMapping = {0:["volume"], 1:["tempo"], 2:["playlist"], 3:["sound"]}
 soundMapping = {"Acoustic 1":0, "Acoustic 2":1, "Fingered 1":2, "Fingered 2":3, "Fretless 1": 4, "Fretless 2": 5, "Picked 1": 6, "Picked 2": 7,  "Slap 1": 8,  "Slap 2": 9,  "Synth 1": 10,  "Synth 2": 11}
 soundName = "Acoustic 1";
 assetPath = "./autobass_playlist"
@@ -133,7 +132,7 @@ class TapTempo:
 ########
 
 # get latest playlist and midi files from google drive (public access)
-API_KEY = os.environ["GOOGLE_API_KEY"]  # API_KEY is an environment variable where the key is stored
+API_KEY = os.environ["GOOGLE_API_KEY"]  # GOOGLE_API_KEY is an environment variable where the key is stored
 
 path = update.download_public_drive_folder(
 	"https://drive.google.com/drive/folders/1io1W0YnH7mI1X7S5Q3wC6OUZZVxWNRpT",
@@ -160,7 +159,6 @@ for pad in first.pads:
 
 # Pygame init (we'll create a tiny hidden window so the event loop works)
 pygame.init()
-pygame.midi.init()
 eventScreen = pygame.display.set_mode((1, 1))  					# no UI; just to pump events
 pygame.display.set_caption("MIDI Event Loop")
 
@@ -172,7 +170,7 @@ pygame.mouse.set_visible (False)
 pygame.event.set_grab (True)
 
 # Open player & load soundfont
-player = fluid_player.LiveFsPlayer("autobass.sf2")
+player = fluid_player.LiveFsPlayer("autobass.sf2", "alsa", "hw:2")
 
 # Main loop
 eq = EventQueue()		# event queue to manage the events happening in the main loop
@@ -181,25 +179,20 @@ eq.record_event("cc", ["playlist","0"])
 tap = TapTempo(referenceTempo)
 
 
+# List all available MIDI input devices
+print("Available MIDI input devices:")
+for i, name in enumerate(mido.get_input_names()):
+	if "LPD8 mk2" in name:				 # entry device fixed at AKAI LPD8 mk2
+		input_device_name = name
+	print(f"{i}: {name}")
+
+# Initialize the input port
+input_port = mido.open_input(input_device_name)
+print(f"Listening on {input_device_name}...")
+
+
 try:
-	device_id = pygame.midi.get_default_input_id()
-	if device_id == -1:
-		print("No default MIDI input device found.")
-		quit ()
-
-	print(f"Using MIDI input device #{device_id}")
-	inp = pygame.midi.Input(device_id)
-
-
 	while running:
-
-		# If there is MIDI data waiting, read a small batch and post as pygame events
-		if inp.poll():
-			midi_events = inp.read(16)  # list of ([status, d1, d2, d3], timestamp)
-			# Convert to pygame events and push into the event queue
-			for midi_event in pygame.midi.midis2events(midi_events, inp.device_id):
-				pygame.event.post(midi_event)
-
 
 		# Handle Pygame events
 		for event in pygame.event.get():
@@ -208,39 +201,24 @@ try:
 
 			elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
 				running = False
-			
-			elif event.type == pygame.midi.MIDIIN:
-				noteOnMapping = {0:["tap tempo"], 1:["stop"], 2:["pad","0"], 3:["pad","1"], 4:["pad","2"], 5:["pad","3"], 6:["pad","4"], 7:["pad","5"], 8:["pad","6"]}
-				ccMapping = {0:["volume"], 1:["tempo"], 2:["playlist"], 3:["sound"]}
 
-				# e.data1 = status byte, e.data2 = data1, e.data3 = data2
-				status = event.status	 # raw status byte (includes channel)
-				data1  = event.data1	  # note/controller number
-				data2  = event.data2	  # velocity/value
-				channel = status & 0x0F
-				message = status & 0xF0
+		# Handle midi events
+		while input_port.poll():
+			message = input_port.receive()  # Get the message if available
 
-				if message == NOTE_ON and data2 > 0:
-					print(f"NOTE ON  ch={channel+1:02d} note={data1} vel={data2}")
-					try:
-						lst = noteOnMapping [data1]
-						lst.append (str(data2))
-						eq.record_event("note on", lst)
-					except KeyError:
-						pass
-				elif message == NOTE_OFF or (message == NOTE_ON and data2 == 0):
-					# Treat Note On with velocity 0 as Note Off (MIDI convention)
-					print(f"NOTE OFF ch={channel+1:02d} note={data1} vel={data2}")
-				elif message == CC:
-					print(f"CC	   ch={channel+1:02d} cc#={data1} value={data2}")
-					try:
-						lst = []
-						lst.append (ccMapping [data1])
-						lst.append (str(data2))
-						eq.record_event("cc", lst)
-					except KeyError:
-						pass
-
+			if message.type == 'note_on' and message.velocity > 0:
+				try:
+					lst = noteOnMapping [message.note]
+					eq.record_event("note on", lst)
+				except KeyError:
+					pass
+			elif message.type == 'control_change':
+				try:
+					lst = ccMapping [message.control][:]	#[:] will force a copy of the list, otherwise the reference only is copied
+					lst.append (str(message.value))
+					eq.record_event("cc", lst)
+				except KeyError:
+					pass
 
 		# Handle main loop events
 		next_event = eq.get_next_event()
@@ -276,7 +254,6 @@ try:
 					next_song=nextSong
 				)				
 				
-				#HERE: required or not?
 				pygame.display.flip()
 
 			# note on events
@@ -330,7 +307,7 @@ try:
 				# playlist
 				if next_event.values [0] == "playlist":
 					idx = float (next_event.values [1])				# velocity between 0-127
-					idx = int (temp / 127.0) * len (playList)		# index in playlist is between 0 and length of playlist
+					idx = int ((idx * len (playList)) / 127.0)		# index in playlist is between 0 and length of playlist
 					idx = max (idx, 0)								# avoid negative values
 					idx = min (idx, len(playList) - 1)				# avoid values >= length of playlist
 					playListIndex = idx
@@ -339,10 +316,13 @@ try:
 				# sound
 				if next_event.values [0] == "sound":
 					snd = float (next_event.values [1])				# velocity between 0-127
-					snd = int (temp / 127.0) * len (soundMapping)	# index in soundfont is between 0 and length of dictionary
+					snd = int ((snd * len (soundMapping)) / 127.0) 	# index in soundfont is between 0 and length of dictionary
 					snd = max (snd, 0)								# avoid negative values
-					snd = min (snd, len(soundMapping) - 1)			# avoid values >= length of dictionary				
-					soundName = [k for k, v in soundMapping.items() if v == snd]
+					snd = min (snd, len(soundMapping) - 1)			# avoid values >= length of dictionary
+					for k, v in soundMapping.items():
+						if v == snd:
+							soundName = k
+							break
 					#player.set_instrument(channel=0, bank=0, preset=40)
 					player.set_all_instruments(bank=0, preset=snd, skip_drums=True)
 					eq.record_event ("display", [])					# display new sound
@@ -351,16 +331,16 @@ try:
 		pygame.time.wait(5)
 
 
+except KeyboardInterrupt:
+    print("Exiting...")
+
+
 finally:
 	# Cleanup
-	try:
-		inp.close()
-	except Exception:
-		pass
 	# stop audio
 	player.stop()
+	input_port.close()  # Ensure that the midi port is closed on exit
 	# Disable input grabbing before exiting
 	pygame.event.set_grab(False)
 	pygame.mouse.set_visible (True)
-	pygame.midi.quit()
 	pygame.quit()

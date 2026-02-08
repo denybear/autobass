@@ -7,9 +7,11 @@ import mido
 class LiveFsPlayer:
 	DRUM_CHANNEL = 9  # MIDI channel 10 in human terms; 0-based index
 
-	def __init__(self, sf2_path: str):
+	def __init__(self, sf2_path: str, audio_driver: str = "default", output_device: str = "hw:0"):
 		self.fs = fluidsynth.Synth()
-		self.fs.start()
+
+		# Start FluidSynth with the specified output device
+		self.fs.start(driver=audio_driver, options=f"audio_device={output_device}")
 
 		self.sfid = self.fs.sfload(sf2_path)
 		self.set_all_instruments(bank=0, preset=0, skip_drums=True)
