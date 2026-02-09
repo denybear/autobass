@@ -227,7 +227,7 @@ def draw_dashboard(
 	line1_rect = pygame.Rect(bottom_rect.x, y_start, bottom_rect.w, line_h)
 	line2_rect = pygame.Rect(bottom_rect.x, y_start + line_h + BOTTOM_TEXT_LEADING, bottom_rect.w, line_h)
 
-	left1 = f"volume {volume_percent:.0f}%"
+	left1 = f"volume {volume_percent * 100:.0f}%"
 	center1 = f"{tempo_bpm} BPM"
 	right1 = sound
 

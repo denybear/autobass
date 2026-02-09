@@ -2,7 +2,7 @@
 	{
 		"song": "Riders on the strom",
 		"tempo": 90,
-		"sound": "rock",
+		"sound": "Picked 1",
 		"path": "./riders/",
 		"pads": [
 			{ "name": "main", "color": "0xFF0000", "file": "main.mid" },
@@ -13,7 +13,7 @@
 	{
 		"song": "Paradise",
 		"tempo": 100,
-		"sound": "soul",
+		"sound": "Fretless 1",
 		"path": "./paradise/",
 		"pads": [
 			{ "name": "main", "color": "0xFF0000", "file": "main.mid" }
@@ -22,7 +22,7 @@
 	{
 		"song": "Hey Ya!",
 		"tempo": 120,
-		"sound": "pop",
+		"sound": "Fingered 1",
 		"path": "./hey ya/",
 		"pads": [
 			{ "name": "main", "color": "0xFF0000", "file": "main.mid" }

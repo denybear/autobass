@@ -172,13 +172,6 @@ pygame.event.set_grab (True)
 # Open player & load soundfont
 player = fluid_player.LiveFsPlayer("autobass.sf2", "alsa", "hw:2")
 
-# Main loop
-eq = EventQueue()		# event queue to manage the events happening in the main loop
-# force display of 1st song in playlist and video
-eq.record_event("cc", ["playlist","0"])
-tap = TapTempo(referenceTempo)
-
-
 # List all available MIDI input devices
 print("Available MIDI input devices:")
 for i, name in enumerate(mido.get_input_names()):
@@ -189,6 +182,15 @@ for i, name in enumerate(mido.get_input_names()):
 # Initialize the input port
 input_port = mido.open_input(input_device_name)
 print(f"Listening on {input_device_name}...")
+
+# Set event queue
+eq = EventQueue()		# event queue to manage the events happening in the main loop
+
+# force default volume
+player.set_master_volume(audioVolume)
+# force display of 1st song in playlist and video
+eq.record_event("cc", ["playlist","0"])
+tap = TapTempo(referenceTempo)
 
 
 try:
@@ -253,7 +255,6 @@ try:
 					current_song=currentSong,
 					next_song=nextSong
 				)				
-				
 				pygame.display.flip()
 
 			# note on events
@@ -277,6 +278,8 @@ try:
 					
 					if (padNumber < len (pads)):					# make sure the pressed pad is specified in json as a pad
 						#color = color_as_int (pads [padNumber].color)
+						print ("playing :" + assetPath + "/" + playList [playListIndex].path + pads [padNumber].file)
+						player.set_all_instruments(bank=0, preset=soundMapping [soundName], skip_drums=True)
 						referenceTempo = player.play(assetPath + "/" + playList [playListIndex].path + pads [padNumber].file, loop=True)
 						tap = TapTempo(referenceTempo)
 						eq.record_event ("display", [])				# display pad that is playing
@@ -311,6 +314,7 @@ try:
 					idx = max (idx, 0)								# avoid negative values
 					idx = min (idx, len(playList) - 1)				# avoid values >= length of playlist
 					playListIndex = idx
+					soundName = playList [playListIndex].sound
 					eq.record_event ("display", [])					# display new song names
 
 				# sound
@@ -324,7 +328,7 @@ try:
 							soundName = k
 							break
 					#player.set_instrument(channel=0, bank=0, preset=40)
-					player.set_all_instruments(bank=0, preset=snd, skip_drums=True)
+					player.set_all_instruments(bank=0, preset=soundMapping [soundName], skip_drums=True)
 					eq.record_event ("display", [])					# display new sound
 
 		# Keep loop responsive

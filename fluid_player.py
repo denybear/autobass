@@ -11,7 +11,7 @@ class LiveFsPlayer:
 		self.fs = fluidsynth.Synth()
 
 		# Start FluidSynth with the specified output device
-		self.fs.start(driver=audio_driver, options=f"audio_device={output_device}")
+		self.fs.start(driver=audio_driver, device=output_device)
 
 		self.sfid = self.fs.sfload(sf2_path)
 		self.set_all_instruments(bank=0, preset=0, skip_drums=True)
@@ -57,7 +57,14 @@ class LiveFsPlayer:
 
 	def _preload_events(self, midi_path):
 		mid = mido.MidiFile(midi_path)
-		return [(msg.time, msg) for msg in mid]
+		res = []
+		# filter out all the PC messages
+		for msg in mid:
+			if msg.type != "program_change":
+				tp = (msg.time, msg)
+				res.append (tp)
+		return res
+		#return [(msg.time, msg) for msg in mid]
 
 	def _run(self):
 		while not self._stop.is_set():
@@ -137,5 +144,5 @@ class LiveFsPlayer:
 		  1.0   = loud
 		  >1.0  = very loud (use carefully)
 		"""
-		volume = max(0.0, min(float(volume), 10.0))
-		self.fs.set_gain(volume)
+		volume = max(0.0, min(float(volume), 1.0))
+		self.fs.setting ("synth.gain", volume)
