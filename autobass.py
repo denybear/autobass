@@ -170,7 +170,7 @@ pygame.mouse.set_visible (False)
 pygame.event.set_grab (True)
 
 # Open player & load soundfont
-player = fluid_player.LiveFsPlayer("autobass.sf2", "alsa", "hw:2")
+player = fluid_player.LiveFsPlayer("autobass.sf2", "alsa", "default")
 
 # List all available MIDI input devices
 print("Available MIDI input devices:")
@@ -261,11 +261,13 @@ try:
 			if next_event.label == "note on":
 				# stop
 				if next_event.values [0] == "stop":
+					print ("stop")
 					player.stop()
 					eq.record_event("display", [])
 
 				# tap tempo
 				if next_event.values [0] == "tap tempo":
+					print ("tap")
 					tapTempoRatio = tap.tap()
 					if tapTempoRatio is not None:
 						tempoRatio = tapTempoRatio
@@ -332,7 +334,7 @@ try:
 					eq.record_event ("display", [])					# display new sound
 
 		# Keep loop responsive
-		pygame.time.wait(5)
+		pygame.time.wait(30)
 
 
 except KeyboardInterrupt:
