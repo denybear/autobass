@@ -1,8 +1,4 @@
 # autobass
-## Status of the project
-Paused, as it seems there are some issues getting fluidsynth playing midi files (Python via pyfluidsynth). Program features are all functional, but I don't get any sound at all as fluidsynth don't play the noteon requests; however it seems fluidsynth gets the midi requests (program change requests work). Maybe an issue with fluidsynth, it may work with a newer version.
-I may revive the project (either in python, either in C).
-
 ## Object
 autobass is a musical software. Its aim is to play bass lines, while the musician is doing something else.
 The basslines are midi files; a bassline can be split into several midi files, such as: verse, chorus, bridge, etc; or chord Am, chord D, etc.
