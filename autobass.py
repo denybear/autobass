@@ -16,33 +16,37 @@ import fluid_player
 
 #TO DO
 #display pad that is playing (optional)
+#fix tempo
+#improve reesponsiveness of pads
 
 """
 installs:
 
 sudo apt install fluidsynth
+sudo apt install python3-googleapi
+sudo apt install python3-httplib2
+sudo apt install python3-pygame
+sudo apt install python3-mido
+sudo apt install python3-rtmidi
 
-#CREATE VIRTUAL ENVIRONMENT
-sudo apt update
-sudo apt install python3 python3-pip python3-venv
-mkdir my_project
-cd my_project
-python3 -m venv env
-source env/bin/activate
-pip install <module_name>
-deactivate
+install google API key:
+https://console.cloud.google.com/welcome?pli=1&project=autobass
+Select API & Services.
+Click on Credentials.
+display key for autobass
+assign key to GOOGLE_API_KEY environment variable:
 
-#INSTALL PACKAGES
-pip install pretty_midi pyfluidsynth mido python-rtmidi
-pip install pygame
-pip install httplib2
-pip install google-api-python-client
+nano ~/.bashrc
+at the end of file, insert:
+export GOOGLE_API_KEY=****value****
+source ~/.bashrc
+
 """
 
 
 # Main variables
 running = True
-referenceTempo = 120	# initial tempo of midi file
+referenceTempo = 120.0	# initial tempo of midi file
 tempoRatio = 1.0		# to play slower or faster
 tapTempoRatio = None	# to play slower or faster
 knobTempoRatio = 1.0	# to play slower or faster
@@ -52,7 +56,7 @@ noteOnMapping = {0:["tap tempo"], 1:["stop"], 2:["pad","0"], 3:["pad","1"], 4:["
 ccMapping = {0:["volume"], 1:["tempo"], 2:["playlist"], 3:["sound"]}
 soundMapping = {"Acoustic 1":0, "Acoustic 2":1, "Fingered 1":2, "Fingered 2":3, "Fretless 1": 4, "Fretless 2": 5, "Picked 1": 6, "Picked 2": 7,  "Slap 1": 8,  "Slap 2": 9,  "Synth 1": 10,  "Synth 2": 11}
 soundName = "Acoustic 1";
-assetPath = "./autobass_playlist"
+assetPath = "./autobass_playlist/"
 
 
 
@@ -148,13 +152,14 @@ else:
 	print("Downloaded to:", path)
 
 # Create a list of Song objects from playlist.json
-playList = song.load_song_configs_from_file(assetPath + "/playlist.json")
+playList = song.load_song_configs_from_file(assetPath + "playlist.json")
 
 first = playList[0]
-print(first.song, first.tempo, first.sound, first.path)
+# debug only
+#print(first.song, first.tempo, first.sound, first.path)
 
-for pad in first.pads:
-	print(pad.name, pad.color, pad.file, pad.color_as_int())
+#for pad in first.pads:
+#	print(pad.name, pad.color, pad.file, pad.color_as_int())
 
 
 # Pygame init (we'll create a tiny hidden window so the event loop works)
@@ -170,7 +175,7 @@ pygame.mouse.set_visible (False)
 pygame.event.set_grab (True)
 
 # Open player & load soundfont
-player = fluid_player.LiveFsPlayer("autobass.sf2", "alsa", "default")
+player = fluid_player.LiveFsPlayer(assetPath + "autobass.sf2", "pulseaudio")
 
 # List all available MIDI input devices
 print("Available MIDI input devices:")
@@ -210,6 +215,7 @@ try:
 
 			if message.type == 'note_on' and message.velocity > 0:
 				try:
+					print ("pad is pressed")
 					lst = noteOnMapping [message.note]
 					eq.record_event("note on", lst)
 				except KeyError:
@@ -261,13 +267,11 @@ try:
 			if next_event.label == "note on":
 				# stop
 				if next_event.values [0] == "stop":
-					print ("stop")
 					player.stop()
 					eq.record_event("display", [])
 
 				# tap tempo
 				if next_event.values [0] == "tap tempo":
-					print ("tap")
 					tapTempoRatio = tap.tap()
 					if tapTempoRatio is not None:
 						tempoRatio = tapTempoRatio
@@ -279,10 +283,9 @@ try:
 					pads = playList [playListIndex].pads			# list of pads for the current song
 					
 					if (padNumber < len (pads)):					# make sure the pressed pad is specified in json as a pad
-						#color = color_as_int (pads [padNumber].color)
-						print ("playing :" + assetPath + "/" + playList [playListIndex].path + pads [padNumber].file)
+						print ("playing :" + assetPath + playList [playListIndex].path + pads [padNumber].file)
 						player.set_all_instruments(bank=0, preset=soundMapping [soundName], skip_drums=True)
-						referenceTempo = player.play(assetPath + "/" + playList [playListIndex].path + pads [padNumber].file, loop=True)
+						referenceTempo = player.play(assetPath + playList [playListIndex].path + pads [padNumber].file, loop=True)
 						tap = TapTempo(referenceTempo)
 						eq.record_event ("display", [])				# display pad that is playing
 
@@ -334,7 +337,7 @@ try:
 					eq.record_event ("display", [])					# display new sound
 
 		# Keep loop responsive
-		pygame.time.wait(30)
+		pygame.time.wait(5)
 
 
 except KeyboardInterrupt:

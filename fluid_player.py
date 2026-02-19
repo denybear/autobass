@@ -1,19 +1,22 @@
 import threading
 import time
-import fluidsynth
-import pretty_midi
+import pyfluidsynth
 import mido
 
 class LiveFsPlayer:
 	DRUM_CHANNEL = 9  # MIDI channel 10 in human terms; 0-based index
 
-	def __init__(self, sf2_path: str, audio_driver: str = "default", output_device: str = "hw:0"):
-		self.fs = fluidsynth.Synth()
+	def __init__(self, sf2_path: str, audio_driver: str = "default", output_device: str = "default"):
+		self.fs = pyfluidsynth.Synth()
 
 		# Start FluidSynth with the specified output device
-		self.fs.start(driver=audio_driver, device=output_device)
+		if output_device is None:
+			self.fs.start(driver=audio_driver)
+		else:
+			self.fs.start(driver=audio_driver, device=output_device)
 
 		self.sfid = self.fs.sfload(sf2_path)
+		self.fs.program_select(0, self.sfid, 0, 0)
 		self.set_all_instruments(bank=0, preset=0, skip_drums=True)
 
 		for ch in range(16):
@@ -35,11 +38,9 @@ class LiveFsPlayer:
 		"""
 
 		# 1) compute reference BPM once
-		pm = pretty_midi.PrettyMIDI(midi_path)
-		reference_bpm = pm.estimate_tempo()
-
+		reference_bpm = 120.0
 		# 2) preload MIDI events ONCE (gapless looping key)
-		self._events = self._preload_events(midi_path)
+		reference_bpm, self._events = self._preload_events(midi_path)
 
 		self.stop()
 		self._loop = loop
@@ -58,13 +59,16 @@ class LiveFsPlayer:
 	def _preload_events(self, midi_path):
 		mid = mido.MidiFile(midi_path)
 		res = []
+		bpm = 120
 		# filter out all the PC messages
 		for msg in mid:
-			if msg.type != "program_change":
+			if msg.type == "set_tempo":
+				bpm = 60000000 / msg.tempo
+				print (bpm)
+			elif msg.type != "program_change":
 				tp = (msg.time, msg)
 				res.append (tp)
-		return res
-		#return [(msg.time, msg) for msg in mid]
+		return bpm, res
 
 	def _run(self):
 		while not self._stop.is_set():
