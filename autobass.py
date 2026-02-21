@@ -314,8 +314,8 @@ try:
 				# tempo
 				if next_event.values [0] == "tempo":
 					temp = float (next_event.values [1])			# velocity between 0-127
-					temp = (temp / 127.0) * 0.2						# tempo increment between 0.0-0.2
-					temp = temp - 0.1								# tempo increment between -0.1 and +0.1
+					temp = (temp / 127.0) * 0.3						# tempo increment between 0.0-0.3
+					temp = temp - 0.15								# tempo increment between -0.15 and +0.15
 					knobTempoRatio = temp
 					if tapTempoRatio is not None:
 						tempoRatio = tapTempoRatio + knobTempoRatio
