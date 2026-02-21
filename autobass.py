@@ -6,7 +6,8 @@ sys.path.append('./')
 import pygame
 import os
 import random
-import mido
+import rtmidi
+
 
 from collections import deque
 import update
@@ -14,10 +15,6 @@ import song
 import draw
 import fluid_player
 
-#TO DO
-#display pad that is playing (optional)
-#fix tempo
-#improve reesponsiveness of pads
 
 """
 installs:
@@ -44,12 +41,13 @@ source ~/.bashrc
 """
 
 
-# Main variables
+# Main variablesfrom mido.backends.rtmidi import Input
+
 running = True
 referenceTempo = 120.0	# initial tempo of midi file
 tempoRatio = 1.0		# to play slower or faster
 tapTempoRatio = None	# to play slower or faster
-knobTempoRatio = 1.0	# to play slower or faster
+knobTempoRatio = 0.0	# to play slower or faster
 playListIndex = 0
 audioVolume = 0.5
 noteOnMapping = {0:["tap tempo"], 1:["stop"], 2:["pad","0"], 3:["pad","1"], 4:["pad","2"], 5:["pad","3"], 6:["pad","4"], 7:["pad","5"], 8:["pad","6"]}
@@ -57,7 +55,8 @@ ccMapping = {0:["volume"], 1:["tempo"], 2:["playlist"], 3:["sound"]}
 soundMapping = {"Acoustic 1":0, "Acoustic 2":1, "Fingered 1":2, "Fingered 2":3, "Fretless 1": 4, "Fretless 2": 5, "Picked 1": 6, "Picked 2": 7,  "Slap 1": 8,  "Slap 2": 9,  "Synth 1": 10,  "Synth 2": 11}
 soundName = "Acoustic 1";
 assetPath = "./autobass_playlist/"
-
+playingSong = None		# used to display the pad currently playing in fluo yellow
+playingPad = None
 
 
 # class for handling events in the main loop
@@ -129,8 +128,27 @@ class TapTempo:
 		return tapped_bpm / self.reference_bpm
 
 
+# class for handling midi messages from rtmidi
+def midiCallback(msg, data=None):
+	messageType = (msg [0][0]) & 0xF0
+	messageNote = (msg [0][1]) & 0x7F
+	messageVelocity = (msg [0][2]) & 0x7F
+	if messageType == 0x90 and messageVelocity > 0:		# Note on
+		try:
+			lst = noteOnMapping [messageNote]
+			eq.record_event("note on", lst)
+		except KeyError:
+			pass
+	elif messageType == 0xB0:							# Control Change (CC)
+		try:
+			lst = ccMapping [messageNote][:]			# [:] will force a copy of the list, otherwise the reference only is copied
+			lst.append (str(messageVelocity))
+			eq.record_event("cc", lst)
+		except KeyError:
+			pass
 
-	
+
+
 ########
 # MAIN #
 ########
@@ -153,14 +171,7 @@ else:
 
 # Create a list of Song objects from playlist.json
 playList = song.load_song_configs_from_file(assetPath + "playlist.json")
-
 first = playList[0]
-# debug only
-#print(first.song, first.tempo, first.sound, first.path)
-
-#for pad in first.pads:
-#	print(pad.name, pad.color, pad.file, pad.color_as_int())
-
 
 # Pygame init (we'll create a tiny hidden window so the event loop works)
 pygame.init()
@@ -177,16 +188,21 @@ pygame.event.set_grab (True)
 # Open player & load soundfont
 player = fluid_player.LiveFsPlayer(assetPath + "autobass.sf2", "pulseaudio")
 
-# List all available MIDI input devices
-print("Available MIDI input devices:")
-for i, name in enumerate(mido.get_input_names()):
-	if "LPD8 mk2" in name:				 # entry device fixed at AKAI LPD8 mk2
-		input_device_name = name
-	print(f"{i}: {name}")
+# Create an instance of RtMidiIn, open MIDI input device
+midiIn = rtmidi.MidiIn()
+availablePorts = midiIn.get_ports()
 
-# Initialize the input port
-input_port = mido.open_input(input_device_name)
-print(f"Listening on {input_device_name}...")
+portNumber = None
+if availablePorts:
+	for i in range (0, len (availablePorts)):
+		if "LPD8 mk2" in availablePorts [i]:	# entry device fixed at AKAI LPD8 mk2
+			portNumber = i
+
+if portNumber is None:
+	sys.exit ()
+
+midiIn.open_port (portNumber)					# Change index if necessary to your device
+midiIn.set_callback (midiCallback)				# set the callback
 
 # Set event queue
 eq = EventQueue()		# event queue to manage the events happening in the main loop
@@ -194,9 +210,9 @@ eq = EventQueue()		# event queue to manage the events happening in the main loop
 # force default volume
 player.set_master_volume(audioVolume)
 # force display of 1st song in playlist and video
-eq.record_event("cc", ["playlist","0"])
 tap = TapTempo(referenceTempo)
-
+eq.record_event("cc", ["playlist","0"])
+print ("Ready to roll!")
 
 try:
 	while running:
@@ -208,26 +224,7 @@ try:
 
 			elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
 				running = False
-
-		# Handle midi events
-		while input_port.poll():
-			message = input_port.receive()  # Get the message if available
-
-			if message.type == 'note_on' and message.velocity > 0:
-				try:
-					print ("pad is pressed")
-					lst = noteOnMapping [message.note]
-					eq.record_event("note on", lst)
-				except KeyError:
-					pass
-			elif message.type == 'control_change':
-				try:
-					lst = ccMapping [message.control][:]	#[:] will force a copy of the list, otherwise the reference only is copied
-					lst.append (str(message.value))
-					eq.record_event("cc", lst)
-				except KeyError:
-					pass
-
+		
 		# Handle main loop events
 		next_event = eq.get_next_event()
 		if next_event:		# make sure there is an event to process
@@ -236,20 +233,27 @@ try:
 			if next_event.label == "display":
 				squares = []
 				square = {}
+
+				# define song names
+				previousSoung = playList [playListIndex - 1].song if playListIndex > 0 else ""
+				nextSong = playList [playListIndex + 1].song if playListIndex < (len (playList) - 1) else ""
+				currentSong = playList [playListIndex].song
+
 				# define pads to be displayed
 				for i in range (0,6):
 					square = {}
 					try:
 						square ["text"] = playList [playListIndex].pads [i].name
 						square ["color"] = playList [playListIndex].pads [i].color_as_tuple()
+						# manage case of pad is currently playing: square will be fluo yellow
+						if playingSong is not None:
+							if playingSong == currentSong:
+								if playingPad == i:
+									square ["color"] = (255, 243, 0)
 					except Exception as e:
 						square ["text"] = ""
 						square ["color"] = (128,128,128)		# gray pads if not defined
-					squares.append (square)
-				# define song names
-				previousSoung = playList [playListIndex - 1].song if playListIndex > 0 else ""
-				nextSong = playList [playListIndex + 1].song if playListIndex < (len (playList) - 1) else ""
-				currentSong = playList [playListIndex].song
+					squares.append (square)				
 				
 				draw.draw_dashboard(
 					screen=screen,
@@ -268,14 +272,19 @@ try:
 				# stop
 				if next_event.values [0] == "stop":
 					player.stop()
+					playingSong = None
+					playingPad = None
 					eq.record_event("display", [])
 
 				# tap tempo
 				if next_event.values [0] == "tap tempo":
 					tapTempoRatio = tap.tap()
 					if tapTempoRatio is not None:
+						knobTempoRatio = 0.0
 						tempoRatio = tapTempoRatio
-						player.set_speed(tempoRatio)
+						tempoRatio = max(0.1, min (tempoRatio, 4.0))		# speed boundaries
+						player.set_speed (tempoRatio)
+						eq.record_event ("display", [])				# display new tempo
 		
 				# pad
 				if next_event.values [0] == "pad":
@@ -283,10 +292,13 @@ try:
 					pads = playList [playListIndex].pads			# list of pads for the current song
 					
 					if (padNumber < len (pads)):					# make sure the pressed pad is specified in json as a pad
-						print ("playing :" + assetPath + playList [playListIndex].path + pads [padNumber].file)
+						#print ("playing :" + assetPath + playList [playListIndex].path + pads [padNumber].file)
+						playingSong = playList [playListIndex].song
+						playingPad = padNumber
+						player.set_tempo (referenceTempo)
+						player.set_speed (tempoRatio)
 						player.set_all_instruments(bank=0, preset=soundMapping [soundName], skip_drums=True)
-						referenceTempo = player.play(assetPath + playList [playListIndex].path + pads [padNumber].file, loop=True)
-						tap = TapTempo(referenceTempo)
+						player.queue_play(assetPath + playList [playListIndex].path + pads [padNumber].file)
 						eq.record_event ("display", [])				# display pad that is playing
 
 			# cc events
@@ -309,6 +321,7 @@ try:
 						tempoRatio = tapTempoRatio + knobTempoRatio
 					else:
 						tempoRatio = 1.0 + knobTempoRatio
+					tempoRatio = max(0.1, min (tempoRatio, 4.0))		# speed boundaries
 					player.set_speed (tempoRatio)					# assign new tempo
 					eq.record_event ("display", [])					# display new tempo
 
@@ -320,6 +333,10 @@ try:
 					idx = min (idx, len(playList) - 1)				# avoid values >= length of playlist
 					playListIndex = idx
 					soundName = playList [playListIndex].sound
+					referenceTempo = playList [playListIndex].tempo
+					tempoRatio = 1.0								# reset tempo
+					knobTempoRatio = 0.0							# useless but you never know
+					tapTempoRatio = None					
 					eq.record_event ("display", [])					# display new song names
 
 				# sound
@@ -332,10 +349,9 @@ try:
 						if v == snd:
 							soundName = k
 							break
-					#player.set_instrument(channel=0, bank=0, preset=40)
 					player.set_all_instruments(bank=0, preset=soundMapping [soundName], skip_drums=True)
 					eq.record_event ("display", [])					# display new sound
-
+		
 		# Keep loop responsive
 		pygame.time.wait(5)
 
@@ -346,9 +362,10 @@ except KeyboardInterrupt:
 
 finally:
 	# Cleanup
-	# stop audio
+	# stop audio and midi in
 	player.stop()
-	input_port.close()  # Ensure that the midi port is closed on exit
+	midiIn.close_port()
+	del midiIn
 	# Disable input grabbing before exiting
 	pygame.event.set_grab(False)
 	pygame.mouse.set_visible (True)

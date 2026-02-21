@@ -33,7 +33,7 @@ class Pad:
 @dataclass(frozen=True)
 class SongConfig:
 	song: str
-	tempo: int
+	tempo: float
 	sound: str
 	path: str
 	pads: List[Pad]
@@ -42,7 +42,7 @@ class SongConfig:
 	def from_dict(d: Dict[str, Any]) -> "SongConfig":
 		return SongConfig(
 			song=d["song"],
-			tempo=int(d["tempo"]),
+			tempo=d["tempo"],
 			sound=d["sound"],
 			path=d["path"],
 			pads=[Pad.from_dict(p) for p in d.get("pads", [])],

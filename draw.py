@@ -106,7 +106,7 @@ def _ellipsize(text, font, max_width):
 	return best
 
 
-def _draw_justified_triplet(surface, y, line_rect, font, color, left, center, right, padding=2):
+def _draw_justified_triplet(surface, y, line_rect, font, color, left, center, right, padding=2, bold_middle = False):
 	col_w = line_rect.w // 3
 	left_rect = pygame.Rect(line_rect.x, y, col_w, line_rect.h)
 	center_rect = pygame.Rect(line_rect.x + col_w, y, col_w, line_rect.h)
@@ -121,9 +121,11 @@ def _draw_justified_triplet(surface, y, line_rect, font, color, left, center, ri
 		surface.blit(img, (left_rect.x + padding, y + (line_rect.h - img.get_height()) // 2))
 
 	if center_txt:
+		font.set_bold (bold_middle)
 		img = font.render(center_txt, True, color)
 		img_rect = img.get_rect(center=(center_rect.centerx, y + line_rect.h // 2))
 		surface.blit(img, img_rect)
+		font.set_bold (False)
 
 	if right_txt:
 		img = font.render(right_txt, True, color)
@@ -237,5 +239,5 @@ def draw_dashboard(
 	)
 	_draw_justified_triplet(
 		screen, line2_rect.y, line2_rect, info_font, INFO_FONT_COLOR,
-		prev_song, current_song, next_song
+		prev_song, current_song, next_song, 2, True
 	)

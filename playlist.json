@@ -1,27 +1,32 @@
 [
 	{
 		"song": "Riders on the strom",
-		"tempo": 90,
+		"tempo": 104.0,
 		"sound": "Picked 1",
 		"path": "./riders/",
 		"pads": [
-			{ "name": "main", "color": "0xFF0000", "file": "main.mid" },
-			{ "name": "Am", "color": "0x00FF00", "file": "Am.mid" },
-			{ "name": "D", "color": "0x0000FF", "file": "D.mid" }		
+			{ "name": "main", "color": "0x03045E", "file": "main.mid" },
+			{ "name": "Am", "color": "0x023E8A", "file": "Am.mid" },
+			{ "name": "D", "color": "0x0077B6", "file": "D.mid" }		
 		]
 	},
 	{
 		"song": "Paradise",
-		"tempo": 100,
+		"tempo": 200.0,
 		"sound": "Fretless 1",
 		"path": "./paradise/",
 		"pads": [
-			{ "name": "main", "color": "0xFF0000", "file": "main.mid" }
+			{ "name": "main", "color": "0x0096C7", "file": "main.mid" },
+			{ "name": "main", "color": "0x00B4D8", "file": "main.mid" },
+			{ "name": "main", "color": "0x48CAE4", "file": "main.mid" },
+			{ "name": "main", "color": "0x90E0EF", "file": "main.mid" },
+			{ "name": "main", "color": "0xADE8F4", "file": "main.mid" },
+			{ "name": "main", "color": "0xCAF0F8", "file": "main.mid" }
 		]
 	},
 	{
 		"song": "Hey Ya!",
-		"tempo": 120,
+		"tempo": 159.0,
 		"sound": "Fingered 1",
 		"path": "./hey ya/",
 		"pads": [
