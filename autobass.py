@@ -54,7 +54,7 @@ noteOnMapping = {0:["tap tempo"], 1:["stop"], 2:["pad","0"], 3:["pad","1"], 4:["
 ccMapping = {0:["volume"], 1:["tempo"], 2:["playlist"], 3:["sound"]}
 soundMapping = {"Acoustic 1":0, "Acoustic 2":1, "Fingered 1":2, "Fingered 2":3, "Fretless 1": 4, "Fretless 2": 5, "Picked 1": 6, "Picked 2": 7,  "Slap 1": 8,  "Slap 2": 9,  "Synth 1": 10,  "Synth 2": 11}
 soundName = "Acoustic 1";
-assetPath = "./autobass_playlist/"
+assetPath = "~/autobass/autobass_playlist/"
 playingSong = None		# used to display the pad currently playing in fluo yellow
 playingPad = None
 
@@ -159,7 +159,7 @@ API_KEY = os.environ["GOOGLE_API_KEY"]  # GOOGLE_API_KEY is an environment varia
 path = update.download_public_drive_folder(
 	"https://drive.google.com/drive/folders/1io1W0YnH7mI1X7S5Q3wC6OUZZVxWNRpT",
 	api_key=API_KEY,
-	dest_root="./",
+	dest_root="~/autobass/",
 	timeout_sec=10,
 )
 
