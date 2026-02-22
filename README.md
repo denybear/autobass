@@ -51,7 +51,11 @@ crontab -e
 ```
 then add the following line at the end of the crontab table:  
 ```
-@reboot sh /home/pi/syntwo.sh  
+@reboot sh /my_path/autobass.sh  
+```
+example:
+```
+@reboot sh /home/pi/autobass/autobass.sh  
 ```
 remember to save (ctrl-O) and exit (ctrl-X).  
 
