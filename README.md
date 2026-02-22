@@ -25,6 +25,7 @@ The split playlist-songs-midi files is detailed in a json file (playlist.json).
 ## Installation
 <ins>make sure the following python modules are installed:</ins>   
 ```
+sudo apt install pulseaudio pulseaudio-utils
 sudo apt install fluidsynth
 sudo apt install python3-googleapi
 sudo apt install python3-httplib2
