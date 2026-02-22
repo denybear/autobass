@@ -13,9 +13,9 @@ from googleapiclient.http import MediaIoBaseDownload  # chunked downloads [5](ht
 
 FOLDER_MIME = "application/vnd.google-apps.folder"
 
-
+"""
 def _extract_drive_id(url_or_id: str) -> str | None:
-	"""Extract Drive ID from common folder/file URL formats, or accept a raw ID."""
+	# Extract Drive ID from common folder/file URL formats, or accept a raw ID.
 	if not url_or_id:
 		return None
 	s = url_or_id.strip()
@@ -27,7 +27,25 @@ def _extract_drive_id(url_or_id: str) -> str | None:
 	# URL patterns: /folders/<ID>, ?id=<ID>, /d/<ID>
 	m = re.search(r"(?:/folders/|id=|/d/)([^/?&\s]+)", s)
 	return m.group(1) if m else None
+"""
 
+# function that is compatible with python < 3.10
+import re
+from typing import Optional
+
+def _extract_drive_id(url_or_id: str) -> Optional[str]:
+    """Extract Drive ID from common folder/file URL formats, or accept a raw ID."""
+    if not url_or_id:
+        return None
+    s = url_or_id.strip()
+
+    # raw ID case
+    if re.fullmatch(r"[-\w]{10,}", s) and "http" not in s:
+        return s
+
+    # URL patterns: /folders/<ID>, ?id=<ID>, /d/<ID>
+    m = re.search(r"(?:/folders/|id=|/d/)([^/?&\s]+)", s)
+    return m.group(1) if m else None
 
 def download_public_drive_folder(
 	folder_url_or_id: str,
