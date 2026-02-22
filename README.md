@@ -22,4 +22,61 @@ The split playlist-songs-midi files is detailed in a json file (playlist.json).
 * change bass sound (acoustic, fingered, picked, etc) with a knob
 * dedicated sf2 soundfont file with many bass sounds
 
+## Installation
+<ins>make sure the following python modules are installed:</ins>   
+```
+sudo apt install fluidsynth
+sudo apt install python3-googleapi
+sudo apt install python3-httplib2
+sudo apt install python3-pygame
+sudo apt install python3-mido
+sudo apt install python3-rtmidi
+````
+
+<ins>install google API key:</ins>   
+1. install google API key: `https://console.cloud.google.com/welcome?pli=1&project=autobass`   
+2. select: **API & Services --> Click on Credentials --> Display key for autobass**   
+3. assign key to GOOGLE_API_KEY environment variable: `nano ~/.bashrc`   
+4. at the end of file, insert:
+```
+export GOOGLE_API_KEY=****value****
+source ~/.bashrc
+```
+
+## Autorun at startup
+1. create a service file:
+```
+sudo nano /etc/systemd/system/mon_script.service`
+```
+2. type a file like this:
+```
+[Unit]
+Description=Mon Script Python Complexe
+After=multi-user.target
+
+[Service]
+ExecStart=/usr/bin/python3 /path/vers/mon_script.py
+WorkingDirectory=/path/vers
+StandardOutput=journal
+StandardError=journal
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+```
+3. activate the service:
+```
+sudo systemctl enable mon_script.service
+sudo systemctl start mon_script.service
+```
+4. check service status:
+```
+sudo systemctl status mon_script.service
+```
+5. your service should run at startup
+
+
+
+
+
 
