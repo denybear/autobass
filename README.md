@@ -51,34 +51,35 @@ sudo nano /etc/systemd/user/mon_script.service`
 2. type a file like this:
 ```
 [Unit]
-Description=Mon Script Python Complexe
-After=multi-user.target
+Description=autobass python script
+After=default.target
 
 [Service]
 Environment="GOOGLE_API_KEY=****value****"
-Environment="XDG_RUNTIME_DIR=/run/user/%U"
-ExecStart=/usr/bin/python3 /path/vers/mon_script.py
-WorkingDirectory=/path/vers
+Environment="XDG_RUNTIME_DIR=/run/user/%u"
+ExecStart=/usr/bin/python3 /home/pi/autobass/autobass.py
+WorkingDirectory=/home/pi/autobass
 StandardOutput=journal
 StandardError=journal
 Restart=on-failure
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=default.target
 ```
 3. activate the service:
 ```
-sudo systemctl --user enable mon_script.service
-sudo systemctl --user start mon_script.service
+systemctl --user enable mon_script.service
+systemctl --user start mon_script.service
 ```
 4. check service status:
 ```
-sudo systemctl --user status mon_script.service
+systemctl --user status mon_script.service
 ```
 5. your service should run at startup
 6. in case of issues, check the log:
 ```
 journalctl --user -u mon_script.service
+journalctl --user -xe
 ```
 
 
