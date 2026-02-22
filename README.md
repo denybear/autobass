@@ -46,7 +46,7 @@ source ~/.bashrc
 ## Autorun at startup
 1. create a service file:
 ```
-sudo nano /etc/systemd/system/mon_script.service`
+sudo nano /etc/systemd/user/mon_script.service`
 ```
 2. type a file like this:
 ```
@@ -56,6 +56,7 @@ After=multi-user.target
 
 [Service]
 Environment="GOOGLE_API_KEY=****value****"
+Environment="XDG_RUNTIME_DIR=/run/user/%U"
 ExecStart=/usr/bin/python3 /path/vers/mon_script.py
 WorkingDirectory=/path/vers
 StandardOutput=journal
@@ -67,14 +68,18 @@ WantedBy=multi-user.target
 ```
 3. activate the service:
 ```
-sudo systemctl enable mon_script.service
-sudo systemctl start mon_script.service
+sudo systemctl --user enable mon_script.service
+sudo systemctl --user start mon_script.service
 ```
 4. check service status:
 ```
-sudo systemctl status mon_script.service
+sudo systemctl --user status mon_script.service
 ```
 5. your service should run at startup
+6. in case of issues, check the log:
+```
+journalctl --user -u mon_script.service
+```
 
 
 
