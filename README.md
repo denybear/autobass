@@ -55,6 +55,7 @@ Description=Mon Script Python Complexe
 After=multi-user.target
 
 [Service]
+Environment="GOOGLE_API_KEY=****value****"
 ExecStart=/usr/bin/python3 /path/vers/mon_script.py
 WorkingDirectory=/path/vers
 StandardOutput=journal
