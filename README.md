@@ -45,44 +45,25 @@ source ~/.bashrc
 ```
 
 ## Autorun at startup
-1. create a service file:
+1. Define crontab to automatically run synthiboocli.sh at each boot  
 ```
-sudo nano /etc/systemd/user/mon_script.service`
+crontab -e
 ```
-2. type a file like this:
+then add the following line at the end of the crontab table:  
 ```
-[Unit]
-Description=autobass python script
-After=default.target
+@reboot sh /home/pi/syntwo.sh  
+```
+remember to save (ctrl-O) and exit (ctrl-X).  
 
-[Service]
-Environment="GOOGLE_API_KEY=****value****"
-Environment="XDG_RUNTIME_DIR=/run/user/%u"
-ExecStart=/usr/bin/python3 /home/pi/autobass/autobass.py
-WorkingDirectory=/home/pi/autobass
-StandardOutput=journal
-StandardError=journal
-Restart=on-failure
-
-[Install]
-WantedBy=default.target
+2. Just to make sure you did not mess with crontab, check what you have done  
 ```
-3. activate the service:
+crontab -l
 ```
-systemctl --user enable mon_script.service
-systemctl --user start mon_script.service
+your line should be there.  
+Once this is done, you can reboot your headless PI, everything should work fine...
 ```
-4. check service status:
-```
-systemctl --user status mon_script.service
-```
-5. your service should run at startup
-6. in case of issues, check the log:
-```
-journalctl --user -u mon_script.service
-journalctl --user -xe
-```
-
+sudo reboot now
+```   
 
 
 
