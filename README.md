@@ -45,29 +45,7 @@ source ~/.bashrc
 ```
 
 ## Autorun at startup
-1. Define crontab to automatically run synthiboocli.sh at each boot  
-```
-crontab -e
-```
-then add the following line at the end of the crontab table:  
-```
-@reboot sh /my_path/autobass.sh  
-```
-example:
-```
-@reboot sh /home/pi/autobass/autobass.sh  
-```
-remember to save (ctrl-O) and exit (ctrl-X).  
 
-2. Just to make sure you did not mess with crontab, check what you have done  
-```
-crontab -l
-```
-your line should be there.  
-Once this is done, you can reboot your headless PI, everything should work fine...
-```
-sudo reboot now
-```   
 
 
 
