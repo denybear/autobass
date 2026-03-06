@@ -4,6 +4,7 @@ import statistics
 
 sys.path.append('./')
 import pygame
+from pygame._sdl2.video import Window 
 import os
 import random
 import rtmidi
@@ -19,6 +20,7 @@ import fluid_player
 """
 installs:
 
+sudo apt install pulseaudio pulseaudio-utils
 sudo apt install fluidsynth
 sudo apt install python3-googleapi
 sudo apt install python3-httplib2
@@ -179,8 +181,9 @@ eventScreen = pygame.display.set_mode((1, 1))  					# no UI; just to pump events
 pygame.display.set_caption("MIDI Event Loop")
 
 # Create windows
-os.environ['SDL_VIDEO_WINDOW_POS'] = '%i, %i' % (0, 0)			# force window positionning to primary display at 0,0
 screen = pygame.display.set_mode((480, 320), pygame.NOFRAME)	# fixed display size 480 x 320
+win = Window.from_display_module ()								# force window positionning to primary display at top left corner
+win.position = (0,0)
 # force all inputs to be in the pygame window, and hide mouse
 pygame.mouse.set_visible (False)
 pygame.event.set_grab (True)
